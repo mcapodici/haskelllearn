@@ -14,7 +14,10 @@ data BuyOrder = BuyOrder {
   buy_order_quantity :: Int, 
   buy_order_creationTimeUtc :: DateTime
   }
-  deriving (Show, Eq)
+  deriving (Eq)
+
+instance Show BuyOrder where
+  show (BuyOrder p q ts) = "B " ++ (show q) ++ "@" ++ (show p)
 
 instance Ord BuyOrder where
   compare o1 o2 =
@@ -28,8 +31,11 @@ data SellOrder = SellOrder {
   sell_order_quantity :: Int, 
   sell_order_creationTimeUtc :: DateTime
   }
-  deriving (Show, Eq)
+  deriving (Eq)
 
+instance Show SellOrder where
+  show (SellOrder p q ts) = "S " ++ (show q) ++ "@" ++ (show p)
+  
 instance Ord SellOrder where
   compare o1 o2 =
     case comparing order_price o1 o2 of
@@ -80,3 +86,16 @@ instance Order BuyOrSellOrder where
   order_creationTimeUtc (SOrder o) = order_creationTimeUtc o
   queueOrder (BOrder o) = queueOrder o
   queueOrder (SOrder o) = queueOrder o
+
+instance Show BuyOrSellOrder where
+  show (BOrder o) = show o
+  show (SOrder o) = show o
+
+data Trade = Trade {
+  trade_price :: Price,
+  trade_quantity :: Int
+--  trade_creationTimeStampUtc :: DateTime
+}
+
+instance Show Trade where
+  show t = "T " ++ show (trade_quantity t) ++ "@" ++ show (trade_price t)
