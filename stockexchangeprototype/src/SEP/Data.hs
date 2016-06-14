@@ -49,23 +49,37 @@ data OrderCollection = OrderCollection {
   }
   deriving Show
 
-class Order o where
+data Direction = Buy | Sell deriving (Show, Eq, Ord)
+
+class Ord o => Order o where
   order_price :: o -> Price
   order_quantity :: o -> Int
   order_creationTimeUtc :: o -> DateTime
   queueOrder :: o -> OrderCollection -> OrderCollection
+  direction :: o -> Direction
 
 instance Order BuyOrder where
   order_price = buy_order_price
   order_quantity = buy_order_quantity
   order_creationTimeUtc = buy_order_creationTimeUtc
   queueOrder order queue = OrderCollection (insert order (buyQueue queue)) (sellQueue queue) 
+  direction _ = Buy
 
 instance Order SellOrder where
   order_price = sell_order_price
   order_quantity = sell_order_quantity
   order_creationTimeUtc = sell_order_creationTimeUtc
   queueOrder order queue = OrderCollection (buyQueue queue) (insert order (sellQueue queue)) 
+  direction _ = Sell
+
+class QuantityAdjustable a where
+  adjustQuantity :: Int -> a -> a
+
+instance QuantityAdjustable BuyOrder where
+  adjustQuantity q (BuyOrder p _ t) = BuyOrder p q t
+
+instance QuantityAdjustable SellOrder where
+  adjustQuantity q (SellOrder p _ t) = SellOrder p q t
 
 topBuyOrder :: OrderCollection -> Maybe BuyOrder
 topBuyOrder queue = fst <$> maxView (buyQueue queue)
@@ -77,6 +91,7 @@ data BuyOrSellOrder=
     BOrder BuyOrder
   | SOrder SellOrder
 
+{--
 instance Order BuyOrSellOrder where
   order_price (BOrder o) = order_price o
   order_price (SOrder o) = order_price o
@@ -86,11 +101,11 @@ instance Order BuyOrSellOrder where
   order_creationTimeUtc (SOrder o) = order_creationTimeUtc o
   queueOrder (BOrder o) = queueOrder o
   queueOrder (SOrder o) = queueOrder o
-
+--}
 instance Show BuyOrSellOrder where
   show (BOrder o) = show o
   show (SOrder o) = show o
-
+--
 data Trade = Trade {
   trade_price :: Price,
   trade_quantity :: Int

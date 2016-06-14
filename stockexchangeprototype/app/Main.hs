@@ -13,14 +13,7 @@ main = do
   putStrLn "Press x to exit"
   sxState <- orderProcessor
   forkIO $ tradingBot "1" (orderChannel sxState) 
-  waitForX
-
-waitForX :: IO()
-waitForX = do
-  x <- getLine
-  if (x /= "x" && x /= "X") 
-    then waitForX
-    else putStrLn "Exited"
+  threadDelay 5000000 -- run fo 5 s
 
 data SXState = SXState {
   orderChannel :: Chan BuyOrSellOrder
@@ -35,18 +28,19 @@ tradingBot clientid channel = forever $ do
   orderType <- randomRIO (0, 1) :: IO Int
   let order = if orderType == 1 then BOrder (BuyOrder price qty time) else SOrder (SellOrder price qty time)
   writeChan channel order -- Placing tihe order
-  threadDelay 1000000 -- 1 second delay 
+  threadDelay 10000 -- 0.01 second delay 
 
 -- Thread that takes valuse from channel of orders, processes the order, updates the queue
 orderProcessor :: IO SXState
 orderProcessor = do
   channel <- newChan
-  forkIO $ loop (OrderCollection empty empty) channel
+  forkIO $ loop ((OrderCollection empty empty), 1) channel
   return $ SXState channel
     where 
-      loop oc channel = do 
+      loop :: (OrderCollection, Int) -> Chan BuyOrSellOrder -> IO()
+      loop (oc, i) channel = do 
         nextOrder <- readChan channel
-        putStrLn "Processing Order"
+        putStrLn $ "Processing Order #" ++ (show i)
         putStrLn $ "Incoming Order " ++ (show nextOrder)
         let (newOc, trades) = processOrder nextOrder oc
         putStrLn "OrderCollection: "
@@ -54,37 +48,44 @@ orderProcessor = do
         putStrLn "Trades executed: "
         putStrLn $ show trades
         putStrLn "-------------------------------------------------------------"
-        loop newOc channel
+        loop (newOc, i+1) channel
 
 processOrder :: BuyOrSellOrder -> OrderCollection -> (OrderCollection, [Trade])
-processOrder order collection =
-  case order of
-    BOrder bOrder -> 
-      let currSellOrders = sellQueue collection in 
-      case maxView currSellOrders of
-        Nothing -> (queueOrder order collection, []) -- No sell orders at all, so no match possible just queue the buy order
-        Just (mso, remSellOrders) -> -- Matched Sell Order and Remaining sell orders
-          if canMatch bOrder mso then
-            let matchedQty = min (order_quantity mso) (order_quantity order) in
-            let msoNewQty = order_quantity mso - matchedQty in 
-            let orderNewQty = order_quantity order - matchedQty in
-            let trade = Trade (choosePrice (order_price order) (order_price mso)) matchedQty in
-            case msoNewQty of
-              0 -> case orderNewQty of
-                      0 -> (OrderCollection (buyQueue collection) remSellOrders, [trade]) -- perfect match - just remove the corresponding order
-                      _ -> let result = processOrder (BOrder $ BuyOrder (order_price order) orderNewQty (order_creationTimeUtc order)) (OrderCollection (buyQueue collection) remSellOrders) in
-                           (fst result, (trade : (snd result)))
-                              -- ^^ Some order left unfulfilled, process the remainder of that order with the remainder of the order queue
-              _ -> let newSellOrder = SellOrder (order_price mso) msoNewQty (order_creationTimeUtc mso) in
-                   (OrderCollection (buyQueue collection) (insert newSellOrder (delete mso currSellOrders)), [trade]) -- Doesn't require all of the matched order, so
-                     -- just updated that matched order to remove the quantity matched in this trade
-          else
-            (queueOrder order collection, []) -- No sell orders that can match the buy order
+processOrder (BOrder order) oc = 
+  let (bq, sq, trades) = processOrder' order (buyQueue oc) (sellQueue oc) 
+  in (OrderCollection bq sq, trades)
 
-    SOrder x -> (queueOrder order collection, []) -- todo implement DRY
+processOrder (SOrder order) oc = 
+  let (sq, bq, trades) = processOrder' order (sellQueue oc) (buyQueue oc) 
+  in (OrderCollection bq sq, trades)
 
-canMatch :: BuyOrder -> SellOrder -> Bool
-canMatch b s = (order_price b) >= (order_price s)
+processOrder' :: (Order o, Order p, QuantityAdjustable o, QuantityAdjustable p) => o -> Set o -> Set p -> (Set o, Set p, [Trade])
+processOrder' order queue matchQueue =
+  case maxView matchQueue of
+    Nothing -> (insert order queue, matchQueue, []) -- No candidate matching orders at all, so just queue this order for now
+    Just (mo {-- matched order --}, rmq {-- remaining match queue --}) -> 
+      if canMatch order mo then
+        let matchedQty = min (order_quantity mo) (order_quantity order) in
+        let moNewQty = order_quantity mo - matchedQty in 
+        let orderNewQty = order_quantity order - matchedQty in
+        let trade = Trade (choosePrice (order_price order) (order_price mo)) matchedQty in
+        case moNewQty of
+          0 -> case orderNewQty of
+                  0 -> (queue, rmq, [trade]) -- perfect match - just remove the corresponding order
+                  _ -> let (q, mq, ts) = processOrder' (adjustQuantity orderNewQty order) queue rmq in
+                       (q, mq, trade : ts)
+                          -- ^^ Some order left unfulfilled, process the remainder of that order with the remainder of the order queue
+          _ -> (queue, insert (adjustQuantity moNewQty mo) rmq, [trade]) -- Doesn't require all of the matched order, so
+                 -- just updated that matched order to remove the quantity matched in this trade
+      else
+        (insert order queue, matchQueue, []) -- No candidate matching orders with suitable price, so just queue this order for now
+
+
+canMatch :: (Order a, Order b) => a -> b -> Bool
+canMatch x y =
+  if (direction x == Buy) 
+    then (order_price x) >= (order_price y)
+    else (order_price x) <= (order_price y)
 
 choosePrice :: Price -> Price -> Price
 choosePrice buyPrice sellPrice = floor $ ((fromIntegral buyPrice) + (fromIntegral sellPrice)) / 2
