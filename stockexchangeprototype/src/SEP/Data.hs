@@ -3,21 +3,25 @@ module SEP.Data where
 import Data.Set
 import Data.DateTime
 import Data.Ord
+import Text.Printf
 
 -- Describes a trade
 
 type Price = Int -- Price is represented as integer (allowed range [-2^29, 2^29 - 1]) the exchange deals with the 
                  -- smallest unit, e.g. you may want to allow dollars to 2.d.p then then price is in cents.
 
+type ClientIdentifier = Int
+
 data BuyOrder = BuyOrder { 
   buy_order_price :: Price, 
   buy_order_quantity :: Int, 
-  buy_order_creationTimeUtc :: DateTime
+  buy_order_creationTimeUtc :: DateTime,
+  buy_order_clientId :: ClientIdentifier
   }
   deriving (Eq)
 
 instance Show BuyOrder where
-  show (BuyOrder p q ts) = "B " ++ (show q) ++ "@" ++ (show p)
+  show (BuyOrder p q ts i) = printf "B %d@%d (client %d)" q p i 
 
 instance Ord BuyOrder where
   compare o1 o2 =
@@ -29,12 +33,13 @@ instance Ord BuyOrder where
 data SellOrder = SellOrder { 
   sell_order_price :: Price, 
   sell_order_quantity :: Int, 
-  sell_order_creationTimeUtc :: DateTime
+  sell_order_creationTimeUtc :: DateTime,
+  sell_order_clientId :: ClientIdentifier
   }
   deriving (Eq)
 
 instance Show SellOrder where
-  show (SellOrder p q ts) = "S " ++ (show q) ++ "@" ++ (show p)
+  show (SellOrder p q ts i) = printf "S %d@%d (client %d)" q p i 
   
 instance Ord SellOrder where
   compare o1 o2 =
@@ -76,10 +81,10 @@ class QuantityAdjustable a where
   adjustQuantity :: Int -> a -> a
 
 instance QuantityAdjustable BuyOrder where
-  adjustQuantity q (BuyOrder p _ t) = BuyOrder p q t
+  adjustQuantity q (BuyOrder p _ t i) = BuyOrder p q t i
 
 instance QuantityAdjustable SellOrder where
-  adjustQuantity q (SellOrder p _ t) = SellOrder p q t
+  adjustQuantity q (SellOrder p _ t i) = SellOrder p q t i
 
 topBuyOrder :: OrderCollection -> Maybe BuyOrder
 topBuyOrder queue = fst <$> maxView (buyQueue queue)

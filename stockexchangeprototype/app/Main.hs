@@ -12,7 +12,7 @@ main = do
   putStrLn "Prototype Stock Exchange"
   putStrLn "Press x to exit"
   sxState <- orderProcessor
-  forkIO $ tradingBot "1" (orderChannel sxState) 
+  forkIO $ tradingBot 1 (orderChannel sxState) 
   threadDelay 5000000 -- run fo 5 s
 
 data SXState = SXState {
@@ -20,13 +20,13 @@ data SXState = SXState {
   }
 
 
-tradingBot :: String -> Chan BuyOrSellOrder -> IO () -- Trading bot than runs in the same process as the exhange. Can't get more high frequency than that!
+tradingBot :: ClientIdentifier -> Chan BuyOrSellOrder -> IO () -- Trading bot than runs in the same process as the exhange. Can't get more high frequency than that!
 tradingBot clientid channel = forever $ do
   time <- getCurrentTime
   price <- randomRIO (900,1100)
   qty <- randomRIO (10,40)
   orderType <- randomRIO (0, 1) :: IO Int
-  let order = if orderType == 1 then BOrder (BuyOrder price qty time) else SOrder (SellOrder price qty time)
+  let order = if orderType == 1 then BOrder (BuyOrder price qty time clientid) else SOrder (SellOrder price qty time clientid)
   writeChan channel order -- Placing tihe order
   threadDelay 10000 -- 0.01 second delay 
 
