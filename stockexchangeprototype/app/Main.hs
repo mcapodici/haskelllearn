@@ -1,11 +1,14 @@
 module Main where
 
+import System.IO
 import Control.Concurrent
 import SEP.Data
 import Data.Set
 import Control.Monad
 import Data.DateTime
 import System.Random
+import Network.Socket
+import SEP.Parser
 
 main :: IO ()
 main = do
@@ -13,21 +16,59 @@ main = do
   putStrLn "Press x to exit"
   sxState <- orderProcessor
   forkIO $ tradingBot 1 (orderChannel sxState) 
-  threadDelay 5000000 -- run fo 5 s
+  sock <- initialiseNetwork
+  mainLoop sock (orderChannel sxState) 1
 
 data SXState = SXState {
   orderChannel :: Chan BuyOrSellOrderWithConfirmationChannel
   }
 
+mainLoop :: Socket -> Chan BuyOrSellOrderWithConfirmationChannel -> Int -> IO ()
+mainLoop sock chan clientId = do
+  conn <- accept sock
+  forkIO (runTraderConnection conn chan clientId)
+  mainLoop sock chan $! clientId + 1
+
+initialiseNetwork :: IO Socket
+initialiseNetwork = do
+  sock <- socket AF_INET Stream 0
+  setSocketOption sock ReuseAddr 1
+  bind sock (SockAddrInet 4242 iNADDR_ANY)
+  listen sock 2
+  return sock
+
+runTraderConnection :: (Socket, SockAddr) -> Chan BuyOrSellOrderWithConfirmationChannel -> ClientIdentifier -> IO ()
+runTraderConnection (connectedSock, _) channel clientId = do
+  hdl <- socketToHandle connectedSock ReadWriteMode
+  hSetBuffering hdl NoBuffering
+  confirmationChannel <- newChan
+  
+  -- Additional thread: Communicaion of trade confirmations
+  forkIO $ forever $ do
+    confirmation <- readChan confirmationChannel 
+    hPutStrLn hdl $ "Trade confirmation: " ++ (show confirmation)
+
+  -- This thread: Taking of orders loop
+  forever $ do
+    maybeUnstampedOrder <- parseUnstampedOrder . init <$> hGetLine hdl
+    case maybeUnstampedOrder of
+      Nothing -> hPutStrLn hdl "Invalid order syntax"
+      Just uo -> do
+        time <- getCurrentTime
+        writeChan channel (BuyOrSellOrderWithConfirmationChannel (uo time clientId) confirmationChannel) -- Placing tihe order
+
+-- do stuf
+  return ()
+  
 
 tradingBot :: ClientIdentifier -> Chan BuyOrSellOrderWithConfirmationChannel -> IO () -- Trading bot than runs in the same process as the exhange. Can't get more high frequency than that!
 tradingBot clientid channel = do
   confirmationChannel <- newChan
-  forkIO $ forever $ do
+{--  forkIO $ forever $ do
     confirmation <- readChan confirmationChannel 
     putStr "Trade confirmation: "
     putStrLn $ show confirmation
-    putStrLn "-------------------------------------------------------------"
+    putStrLn "-------------------------------------------------------------" --}
   forever $ do
     time <- getCurrentTime
     price <- randomRIO (900,1100)
@@ -47,14 +88,14 @@ orderProcessor = do
       loop :: (OrderCollection, Int) -> Chan BuyOrSellOrderWithConfirmationChannel -> IO()
       loop (oc, i) channel = do 
         BuyOrSellOrderWithConfirmationChannel nextOrder confirmationChannel <- readChan channel
-        putStrLn $ "Processing Order #" ++ (show i)
-        putStrLn $ "Incoming Order " ++ (show nextOrder)
         let (newOc, trades) = processOrder nextOrder oc
+{--        putStrLn $ "Processing Order #" ++ (show i)
+        putStrLn $ "Incoming Order " ++ (show nextOrder)
         putStrLn "OrderCollection: "
         putStrLn $ show newOc
         putStrLn "Trades executed: "
         putStrLn $ show trades
-        putStrLn "-------------------------------------------------------------"
+        putStrLn "-------------------------------------------------------------"--}
         mapM_ (writeChan confirmationChannel) trades
         loop (newOc, i+1) channel
 

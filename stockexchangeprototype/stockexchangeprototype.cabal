@@ -15,10 +15,11 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     SEP.Data
+  exposed-modules:     SEP.Data, SEP.Parser
   build-depends:       base >= 4.7 && < 5
                      , containers
                      , datetime
+                     , parsec
   default-language:    Haskell2010
 
 executable stockexchangeprototype
@@ -30,6 +31,7 @@ executable stockexchangeprototype
                      , containers
                      , stockexchangeprototype
                      , random
+                     , network
   default-language:    Haskell2010
 
 test-suite stockexchangeprototype-test
