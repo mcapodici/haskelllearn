@@ -16,19 +16,26 @@ main = do
   threadDelay 5000000 -- run fo 5 s
 
 data SXState = SXState {
-  orderChannel :: Chan BuyOrSellOrder
+  orderChannel :: Chan BuyOrSellOrderWithConfirmationChannel
   }
 
 
-tradingBot :: ClientIdentifier -> Chan BuyOrSellOrder -> IO () -- Trading bot than runs in the same process as the exhange. Can't get more high frequency than that!
-tradingBot clientid channel = forever $ do
-  time <- getCurrentTime
-  price <- randomRIO (900,1100)
-  qty <- randomRIO (10,40)
-  orderType <- randomRIO (0, 1) :: IO Int
-  let order = if orderType == 1 then BOrder (BuyOrder price qty time clientid) else SOrder (SellOrder price qty time clientid)
-  writeChan channel order -- Placing tihe order
-  threadDelay 10000 -- 0.01 second delay 
+tradingBot :: ClientIdentifier -> Chan BuyOrSellOrderWithConfirmationChannel -> IO () -- Trading bot than runs in the same process as the exhange. Can't get more high frequency than that!
+tradingBot clientid channel = do
+  confirmationChannel <- newChan
+  forkIO $ forever $ do
+    confirmation <- readChan confirmationChannel 
+    putStr "Trade confirmation: "
+    putStrLn $ show confirmation
+    putStrLn "-------------------------------------------------------------"
+  forever $ do
+    time <- getCurrentTime
+    price <- randomRIO (900,1100)
+    qty <- randomRIO (10,40)
+    orderType <- randomRIO (0, 1) :: IO Int
+    let order = if orderType == 1 then BOrder (BuyOrder price qty time clientid) else SOrder (SellOrder price qty time clientid)
+    writeChan channel (BuyOrSellOrderWithConfirmationChannel order confirmationChannel) -- Placing tihe order
+    threadDelay 10000 -- 0.01 second delay 
 
 -- Thread that takes valuse from channel of orders, processes the order, updates the queue
 orderProcessor :: IO SXState
@@ -37,9 +44,9 @@ orderProcessor = do
   forkIO $ loop ((OrderCollection empty empty), 1) channel
   return $ SXState channel
     where 
-      loop :: (OrderCollection, Int) -> Chan BuyOrSellOrder -> IO()
+      loop :: (OrderCollection, Int) -> Chan BuyOrSellOrderWithConfirmationChannel -> IO()
       loop (oc, i) channel = do 
-        nextOrder <- readChan channel
+        BuyOrSellOrderWithConfirmationChannel nextOrder confirmationChannel <- readChan channel
         putStrLn $ "Processing Order #" ++ (show i)
         putStrLn $ "Incoming Order " ++ (show nextOrder)
         let (newOc, trades) = processOrder nextOrder oc
@@ -48,6 +55,7 @@ orderProcessor = do
         putStrLn "Trades executed: "
         putStrLn $ show trades
         putStrLn "-------------------------------------------------------------"
+        mapM_ (writeChan confirmationChannel) trades
         loop (newOc, i+1) channel
 
 processOrder :: BuyOrSellOrder -> OrderCollection -> (OrderCollection, [Trade])

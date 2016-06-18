@@ -4,6 +4,7 @@ import Data.Set
 import Data.DateTime
 import Data.Ord
 import Text.Printf
+import Control.Concurrent
 
 -- Describes a trade
 
@@ -92,7 +93,12 @@ topBuyOrder queue = fst <$> maxView (buyQueue queue)
 topSellOrder :: OrderCollection -> Maybe SellOrder
 topSellOrder queue = fst <$> maxView (sellQueue queue)
 
-data BuyOrSellOrder=  
+data BuyOrSellOrderWithConfirmationChannel = BuyOrSellOrderWithConfirmationChannel {
+  bosowcc_order :: BuyOrSellOrder,
+  bosowcc_channel :: Chan Trade
+}
+
+data BuyOrSellOrder =  
     BOrder BuyOrder
   | SOrder SellOrder
 
