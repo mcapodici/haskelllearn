@@ -8,19 +8,17 @@ type UnstampedOrder = DateTime -> ClientIdentifier -> BuyOrSellOrder
 
 unstampedOrderParser :: Parser UnstampedOrder
 unstampedOrderParser = 
-  do
-    char 'B'
-    qty <- read <$> many1 digit -- TODO: Limit number of digits of price and qty?
-    char '@'
-    price <- read <$> many1 digit
-    return (\ts i -> (BOrder (BuyOrder price qty ts i)))
-  <|>
-  do
-    char 'S'
-    qty <- read <$> many1 digit
-    char '@'
-    price <- read <$> many1 digit
-    return (\ts i -> (SOrder (SellOrder price qty ts i)))
+  parserFor 'B' (\p q t i -> BOrder (BuyOrder p q t i)) <|>
+  parserFor 'S' (\p q t i -> SOrder (SellOrder p q t i))
+  where
+    parserFor :: Char -> (Price -> Int -> DateTime -> ClientIdentifier -> BuyOrSellOrder) -> Parser UnstampedOrder
+    parserFor orderTypeChar constructor =
+          do
+            char orderTypeChar
+            qty <- read <$> many1 digit -- TODO: Limit number of digits of price and qty?
+            char '@'
+            price <- read <$> many1 digit
+            return (\ts i -> constructor price qty ts i)
 
 parseUnstampedOrder :: String -> Maybe UnstampedOrder
 parseUnstampedOrder = rightToMaybe . (parse unstampedOrderParser "order")
