@@ -9,21 +9,26 @@ import Data.DateTime
 import System.Random
 import Network.Socket
 import SEP.Parser
+import qualified Data.Map.Strict as SMap
 
 main :: IO ()
 main = do
   putStrLn "Prototype Stock Exchange"
   putStrLn "Press x to exit"
   sxState <- orderProcessor
-  forkIO $ tradingBot 1 (orderChannel sxState) 
+  --forkIO $ tradingBot (-1) (orderChannel sxState) 
   sock <- initialiseNetwork
   mainLoop sock (orderChannel sxState) 1
 
+data SXRequest
+  = SXRequestOrder BuyOrSellOrder
+  | RegisterClientChannel ClientIdentifier (Chan Trade)
+
 data SXState = SXState {
-  orderChannel :: Chan BuyOrSellOrderWithConfirmationChannel
+  orderChannel :: Chan SXRequest
   }
 
-mainLoop :: Socket -> Chan BuyOrSellOrderWithConfirmationChannel -> Int -> IO ()
+mainLoop :: Socket -> Chan SXRequest -> Int -> IO ()
 mainLoop sock chan clientId = do
   conn <- accept sock
   forkIO (runTraderConnection conn chan clientId)
@@ -37,12 +42,13 @@ initialiseNetwork = do
   listen sock 2
   return sock
 
-runTraderConnection :: (Socket, SockAddr) -> Chan BuyOrSellOrderWithConfirmationChannel -> ClientIdentifier -> IO ()
+runTraderConnection :: (Socket, SockAddr) -> Chan SXRequest -> ClientIdentifier -> IO ()
 runTraderConnection (connectedSock, _) channel clientId = do
   hdl <- socketToHandle connectedSock ReadWriteMode
   hSetBuffering hdl NoBuffering
   confirmationChannel <- newChan
-  
+  writeChan channel (RegisterClientChannel clientId confirmationChannel)
+
   -- Additional thread: Communicaion of trade confirmations
   forkIO $ forever $ do
     confirmation <- readChan confirmationChannel 
@@ -55,49 +61,48 @@ runTraderConnection (connectedSock, _) channel clientId = do
       Nothing -> hPutStrLn hdl "Invalid order syntax"
       Just uo -> do
         time <- getCurrentTime
-        writeChan channel (BuyOrSellOrderWithConfirmationChannel (uo time clientId) confirmationChannel) -- Placing tihe order
+        writeChan channel (SXRequestOrder $ uo time clientId) -- Placing tihe order
 
 -- do stuf
   return ()
   
 
-tradingBot :: ClientIdentifier -> Chan BuyOrSellOrderWithConfirmationChannel -> IO () -- Trading bot than runs in the same process as the exhange. Can't get more high frequency than that!
-tradingBot clientid channel = do
+tradingBot :: ClientIdentifier -> Chan SXRequest -> IO () -- Trading bot than runs in the same process as the exhange. Can't get more high frequency than that!
+tradingBot clientId channel = do
   confirmationChannel <- newChan
-{--  forkIO $ forever $ do
-    confirmation <- readChan confirmationChannel 
-    putStr "Trade confirmation: "
-    putStrLn $ show confirmation
-    putStrLn "-------------------------------------------------------------" --}
+  writeChan channel (RegisterClientChannel clientId confirmationChannel)
   forever $ do
     time <- getCurrentTime
-    price <- randomRIO (900,1100)
-    qty <- randomRIO (10,40)
     orderType <- randomRIO (0, 1) :: IO Int
-    let order = if orderType == 1 then BOrder (BuyOrder price qty time clientid) else SOrder (SellOrder price qty time clientid)
-    writeChan channel (BuyOrSellOrderWithConfirmationChannel order confirmationChannel) -- Placing tihe order
+    price <- if orderType == 0 then randomRIO (999,1050) else randomRIO (950, 1001)
+    qty <- randomRIO (10,40)
+    let order = if orderType == 1 then BOrder (BuyOrder price qty time clientId) else SOrder (SellOrder price qty time clientId)
+    writeChan channel (SXRequestOrder order) -- Placing tihe order
     threadDelay 10000 -- 0.01 second delay 
 
 -- Thread that takes valuse from channel of orders, processes the order, updates the queue
 orderProcessor :: IO SXState
 orderProcessor = do
   channel <- newChan
-  forkIO $ loop ((OrderCollection empty empty), 1) channel
+  forkIO $ loop ((OrderCollection empty empty), SMap.empty, 1) channel
   return $ SXState channel
-    where 
-      loop :: (OrderCollection, Int) -> Chan BuyOrSellOrderWithConfirmationChannel -> IO()
-      loop (oc, i) channel = do 
-        BuyOrSellOrderWithConfirmationChannel nextOrder confirmationChannel <- readChan channel
-        let (newOc, trades) = processOrder nextOrder oc
-{--        putStrLn $ "Processing Order #" ++ (show i)
-        putStrLn $ "Incoming Order " ++ (show nextOrder)
-        putStrLn "OrderCollection: "
-        putStrLn $ show newOc
-        putStrLn "Trades executed: "
-        putStrLn $ show trades
-        putStrLn "-------------------------------------------------------------"--}
-        mapM_ (writeChan confirmationChannel) trades
-        loop (newOc, i+1) channel
+    where
+      -- Todo neet to ensure order collections are strict!
+      loop :: (OrderCollection, SMap.Map ClientIdentifier (Chan Trade), Int) -> Chan SXRequest -> IO()
+      loop (oc, tradeChannels, i) channel = do 
+        nextRequest <- readChan channel
+        case nextRequest of
+          SXRequestOrder nextOrder -> do
+            let (newOc, trades) = processOrder nextOrder oc
+            forM_ trades $ (\trade -> 
+              let sendConfirmation clientId = case SMap.lookup clientId tradeChannels of
+                                              Nothing -> return ()
+                                              Just confirmationChannel -> writeChan confirmationChannel trade
+              in
+                sendConfirmation (trade_buy_client trade) >> sendConfirmation (trade_sell_client trade)
+              )
+            loop (newOc, tradeChannels, i+1) channel
+          RegisterClientChannel clientId chan -> loop (oc, SMap.insert clientId chan tradeChannels, i) channel
 
 processOrder :: BuyOrSellOrder -> OrderCollection -> (OrderCollection, [Trade])
 processOrder (BOrder order) oc = 
@@ -117,7 +122,10 @@ processOrder' order queue matchQueue =
         let matchedQty = min (order_quantity mo) (order_quantity order) in
         let moNewQty = order_quantity mo - matchedQty in 
         let orderNewQty = order_quantity order - matchedQty in
-        let trade = Trade (choosePrice (order_price order) (order_price mo)) matchedQty in
+        let (buy_clientId, sell_clientId) = case direction order of 
+                                          Buy -> (order_clientId order, order_clientId mo)
+                                          Sell -> (order_clientId mo, order_clientId order) in
+        let trade = Trade (choosePrice (order_price order) (order_price mo)) matchedQty buy_clientId sell_clientId in
         case moNewQty of
           0 -> case orderNewQty of
                   0 -> (queue, rmq, [trade]) -- perfect match - just remove the corresponding order

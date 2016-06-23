@@ -61,6 +61,7 @@ class Ord o => Order o where
   order_price :: o -> Price
   order_quantity :: o -> Int
   order_creationTimeUtc :: o -> DateTime
+  order_clientId :: o -> ClientIdentifier
   queueOrder :: o -> OrderCollection -> OrderCollection
   direction :: o -> Direction
 
@@ -68,6 +69,7 @@ instance Order BuyOrder where
   order_price = buy_order_price
   order_quantity = buy_order_quantity
   order_creationTimeUtc = buy_order_creationTimeUtc
+  order_clientId = buy_order_clientId
   queueOrder order queue = OrderCollection (insert order (buyQueue queue)) (sellQueue queue) 
   direction _ = Buy
 
@@ -75,6 +77,7 @@ instance Order SellOrder where
   order_price = sell_order_price
   order_quantity = sell_order_quantity
   order_creationTimeUtc = sell_order_creationTimeUtc
+  order_clientId = sell_order_clientId
   queueOrder order queue = OrderCollection (buyQueue queue) (insert order (sellQueue queue)) 
   direction _ = Sell
 
@@ -93,33 +96,19 @@ topBuyOrder queue = fst <$> maxView (buyQueue queue)
 topSellOrder :: OrderCollection -> Maybe SellOrder
 topSellOrder queue = fst <$> maxView (sellQueue queue)
 
-data BuyOrSellOrderWithConfirmationChannel = BuyOrSellOrderWithConfirmationChannel {
-  bosowcc_order :: BuyOrSellOrder,
-  bosowcc_channel :: Chan Trade
-}
-
 data BuyOrSellOrder =  
     BOrder BuyOrder
   | SOrder SellOrder
 
-{--
-instance Order BuyOrSellOrder where
-  order_price (BOrder o) = order_price o
-  order_price (SOrder o) = order_price o
-  order_quantity (BOrder o) = order_quantity o
-  order_quantity (SOrder o) = order_quantity o
-  order_creationTimeUtc (BOrder o) = order_creationTimeUtc o
-  order_creationTimeUtc (SOrder o) = order_creationTimeUtc o
-  queueOrder (BOrder o) = queueOrder o
-  queueOrder (SOrder o) = queueOrder o
---}
 instance Show BuyOrSellOrder where
   show (BOrder o) = show o
   show (SOrder o) = show o
 --
 data Trade = Trade {
   trade_price :: Price,
-  trade_quantity :: Int
+  trade_quantity :: Int,
+  trade_buy_client :: ClientIdentifier,
+  trade_sell_client :: ClientIdentifier
 --  trade_creationTimeStampUtc :: DateTime
 }
 
