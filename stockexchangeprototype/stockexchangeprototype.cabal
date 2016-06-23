@@ -15,7 +15,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     SEP.Data, SEP.Parser
+  exposed-modules:     SEP.Data, SEP.Parser, SEP.OrderBook
   build-depends:       base >= 4.7 && < 5
                      , containers
                      , datetime
