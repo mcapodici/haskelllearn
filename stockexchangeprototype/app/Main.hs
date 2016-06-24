@@ -1,3 +1,13 @@
+-- TODO:
+--
+-- Use Text instead of String
+-- Handle exceptions and close file handle when writing with TradeWriter
+-- Circular writing of trade files
+-- Accounting - checking balances before allowing trades, keeping track of balances and number of shares, transfers in/out etc
+-- Decide if we want to write to a DB and implement that
+-- Exception handling in general, both synchronous and asynchronous
+-- Security - how to we authenticate users?
+
 module Main where
 
 import System.IO
@@ -11,11 +21,13 @@ import Network.Socket
 import SEP.Parser
 import qualified Data.Map.Strict as SMap
 import SEP.OrderBook
+import SEP.TradeWriter
 
 main :: IO ()
 main = do
   putStrLn "Prototype Stock Exchange"
-  sxState <- orderProcessor
+  tradeWriter <- getTradeWriter
+  sxState <- orderProcessor tradeWriter
   --forkIO $ tradingBot (-1) (orderChannel sxState) 
   sock <- initialiseNetwork
   mainLoop sock (orderChannel sxState) 1
@@ -84,13 +96,13 @@ tradingBot clientId channel = do
     threadDelay 10000 -- 0.01 second delay 
 
 -- Thread that takes valuse from channel of orders, processes the order, updates the queue
-orderProcessor :: IO SXState
-orderProcessor = do
+orderProcessor :: TradeWriter -> IO SXState
+orderProcessor tradeWriter = do
   channel <- newChan
   forkIO $ loop (emptyBook, SMap.empty, 1) channel
   return $ SXState channel
     where
-      -- Todo neet to ensure order collections are strict!
+      -- Todo need to ensure order collections are strict!
       loop :: (OrderBook, SMap.Map ClientIdentifier (Chan Trade), Int) -> Chan SXRequest -> IO()
       loop (book, tradeChannels, i) channel = do 
         nextRequest <- readChan channel
@@ -101,8 +113,10 @@ orderProcessor = do
               let sendConfirmation clientId = case SMap.lookup clientId tradeChannels of
                                               Nothing -> return ()
                                               Just confirmationChannel -> writeChan confirmationChannel trade
-              in
-                sendConfirmation (trade_buy_client trade) >> sendConfirmation (trade_sell_client trade)
+              in 
+                writeTrade tradeWriter trade >>
+                sendConfirmation (trade_buy_client trade) >> 
+                sendConfirmation (trade_sell_client trade)
               )
             loop (newOc, tradeChannels, i+1) channel
           RegisterClientChannel clientId chan -> loop (book, SMap.insert clientId chan tradeChannels, i) channel
