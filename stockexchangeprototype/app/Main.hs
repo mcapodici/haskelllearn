@@ -15,7 +15,6 @@ import SEP.OrderBook
 main :: IO ()
 main = do
   putStrLn "Prototype Stock Exchange"
-  putStrLn "Press x to exit"
   sxState <- orderProcessor
   --forkIO $ tradingBot (-1) (orderChannel sxState) 
   sock <- initialiseNetwork
@@ -149,8 +148,3 @@ canMatch x y =
 
 choosePrice :: Price -> Price -> Price
 choosePrice buyPrice sellPrice = floor $ ((fromIntegral buyPrice) + (fromIntegral sellPrice)) / 2
-
--- TODO sometimes you can fill the order immediately and skip queueing
-
-
-
