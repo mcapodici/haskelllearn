@@ -21,6 +21,7 @@ getTradeWriter =
   do
     channel <- newChan
     fileHandle <- openFile "trades.txt" AppendMode
+    hSetBuffering fileHandle NoBuffering
     forkIO $ tradeWriterLoop channel fileHandle
     return $ TW (writeChan channel)
 
