@@ -1,6 +1,7 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 -- TODO:
 --
--- Use Text instead of String
 -- Handle exceptions and close file handle when writing with TradeWriter
 -- Circular writing of trade files
 -- Accounting - checking balances before allowing trades, keeping track of balances and number of shares, transfers in/out etc
@@ -10,18 +11,22 @@
 
 module Main where
 
-import System.IO
+import Prelude hiding (putStrLn, init)
 import Control.Concurrent
-import SEP.Data
-import Data.Set
 import Control.Monad
 import Data.DateTime
-import System.Random
+import Data.Set
 import Network.Socket
-import SEP.Parser
-import qualified Data.Map.Strict as SMap
+import SEP.Data
 import SEP.OrderBook
+import SEP.Parser
 import SEP.TradeWriter
+import System.IO hiding (hPutStrLn, putStrLn, init, hGetLine)
+import System.Random
+import qualified Data.Map.Strict as SMap
+import Data.Text.Lazy.IO 
+import Data.Text.Lazy
+import Data.Text.Format
 
 main :: IO ()
 main = do
@@ -34,7 +39,7 @@ main = do
 
 data SXRequest
   = SXRequestOrder Order
-  | RegisterClientChannel ClientIdentifier (Chan Trade)
+  | RegisterClientChannel ClientIdentifier (Chan TradeConfirmation)
 
 data SXState = SXState {
   orderChannel :: Chan SXRequest
@@ -64,9 +69,8 @@ runTraderConnection (connectedSock, _) channel clientId = do
   -- Additional thread: Communicaion of trade confirmations
   forkIO $ forever $ do
     confirmation <- readChan confirmationChannel 
-    hPutStrLn hdl $ "Trade confirmation: " ++ (show confirmation)
+    hPutStrLn hdl $ format "Trade confirmation: {} {}@{}" (if (trade_confirmation_direction confirmation) == Buy then "B" else "S") (trade_confirmation_quantity confirmation) (trade_confirmation_price confirmation)
 
-  -- This thread: Taking of orders loop
   forever $ do
     maybeUnstampedOrder <- parseUnstampedOrder . init <$> hGetLine hdl
     case maybeUnstampedOrder of

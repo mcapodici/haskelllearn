@@ -1,12 +1,14 @@
 module SEP.Parser (parseUnstampedOrder) where
 
-import Text.ParserCombinators.Parsec
+import Text.ParserCombinators.Parsec 
 import SEP.Data
 import Data.DateTime
+import Data.Text.Lazy (Text)
+import Text.Parsec.Prim
 
 type UnstampedOrder = DateTime -> ClientIdentifier -> Order
 
-unstampedOrderParser :: Parser UnstampedOrder
+unstampedOrderParser :: Parsec Text () UnstampedOrder
 unstampedOrderParser = 
   do
     directionChar <- oneOf "BS"
@@ -18,7 +20,7 @@ unstampedOrderParser =
     price <- read <$> many1 digit
     return (\ts i -> Order direction price qty ts i)
 
-parseUnstampedOrder :: String -> Maybe UnstampedOrder
+parseUnstampedOrder :: Text -> Maybe UnstampedOrder
 parseUnstampedOrder = rightToMaybe . (parse unstampedOrderParser "order")
 
 rightToMaybe :: Either a b -> Maybe b

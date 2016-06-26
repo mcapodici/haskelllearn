@@ -1,10 +1,14 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module SEP.TradeWriter (TradeWriter, getTradeWriter, writeTrade) where
 
-import System.IO
-import Control.Monad
-import SEP.Data
 import Control.Concurrent
-import Text.Printf
+import Control.Monad
+import Data.Text.Format as T
+import Data.Text.Lazy (Text)
+import SEP.Data
+import System.IO
+import qualified Data.Text.Lazy.IO as DTLIO
 
 {-|
   TradeWriter provides an abstract ability to write a trade to a permanent
@@ -32,7 +36,7 @@ tradeWriterLoop :: Chan Trade -> Handle -> IO ()
 tradeWriterLoop channel fileHandle =
   forever $ do
     trade <- readChan channel
-    hPutStrLn fileHandle (tradeToLog trade)
+    DTLIO.hPutStrLn fileHandle (tradeToLog trade)
     -- todo catch any exceptions - probably best to just write them to
     -- error output as if we are having trouble just writing to a file
     -- then logging may be an issue!
@@ -41,6 +45,6 @@ tradeWriterLoop channel fileHandle =
   Formats a trade into a string for the purposes of the trade writer.
   Unfettered control over the format is required so (show) isn't sufficent.
 -}
-tradeToLog :: Trade -> String
-tradeToLog (Trade price qty buyer seller) = printf "p=%d,q=%d,bcid=%d,scid=%d" price qty buyer seller
+tradeToLog :: Trade -> Text
+tradeToLog (Trade price qty buyer seller) = T.format "p={},q={},bcid={},scid={}" (price, qty, buyer, seller)
 

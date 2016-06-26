@@ -34,5 +34,9 @@ data Trade = Trade {
 --  trade_creationTimeStampUtc :: DateTime
 }
 
-instance Show Trade where
-  show t = "T " ++ show (trade_quantity t) ++ "@" ++ show (trade_price t)
+data TradeConfirmation = TradeConfirmation {i
+  trade_confirmation_direction :: Direction,
+  trade_confirmation_price :: Price,
+  trade_confirmation_quantity :: Int
+}
+  
