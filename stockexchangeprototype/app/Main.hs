@@ -21,16 +21,16 @@ import SEP.Data
 import SEP.OrderBook
 import SEP.Parser
 import SEP.TradeWriter
-import System.IO hiding (hPutStrLn, putStrLn, init, hGetLine)
+import System.IO (hSetBuffering, IOMode(..), BufferMode(..))
 import System.Random
 import qualified Data.Map.Strict as SMap
-import Data.Text.Lazy.IO 
-import Data.Text.Lazy
-import Data.Text.Format
+import qualified Data.Text.Lazy.IO as TextLzIO
+import qualified Data.Text.Lazy as TextLz
+import qualified Data.Text.Format as Text
 
 main :: IO ()
 main = do
-  putStrLn "Prototype Stock Exchange"
+  TextLzIO.putStrLn "Prototype Stock Exchange"
   tradeWriter <- getTradeWriter
   sxState <- orderProcessor tradeWriter
   --forkIO $ tradingBot (-1) (orderChannel sxState) 
@@ -69,12 +69,16 @@ runTraderConnection (connectedSock, _) channel clientId = do
   -- Additional thread: Communicaion of trade confirmations
   forkIO $ forever $ do
     confirmation <- readChan confirmationChannel 
-    hPutStrLn hdl $ format "Trade confirmation: {} {}@{}" (if (trade_confirmation_direction confirmation) == Buy then "B" else "S") (trade_confirmation_quantity confirmation) (trade_confirmation_price confirmation)
+    TextLzIO.hPutStrLn hdl $ 
+      Text.format "Trade confirmation: {} {}@{}" 
+      (if (trade_confirmation_direction confirmation) == Buy then "B" else "S" :: TextLz.Text, 
+      trade_confirmation_quantity confirmation, 
+      trade_confirmation_price confirmation)
 
   forever $ do
-    maybeUnstampedOrder <- parseUnstampedOrder . init <$> hGetLine hdl
+    maybeUnstampedOrder <- parseUnstampedOrder . TextLz.init <$> TextLzIO.hGetLine hdl
     case maybeUnstampedOrder of
-      Nothing -> hPutStrLn hdl "Invalid order syntax"
+      Nothing -> TextLzIO.hPutStrLn hdl "Invalid order syntax"
       Just uo -> do
         time <- getCurrentTime
         writeChan channel (SXRequestOrder $ uo time clientId) -- Placing tihe order
@@ -107,7 +111,7 @@ orderProcessor tradeWriter = do
   return $ SXState channel
     where
       -- Todo need to ensure order collections are strict!
-      loop :: (OrderBook, SMap.Map ClientIdentifier (Chan Trade), Int) -> Chan SXRequest -> IO()
+      loop :: (OrderBook, SMap.Map ClientIdentifier (Chan TradeConfirmation), Int) -> Chan SXRequest -> IO()
       loop (book, tradeChannels, i) channel = do 
         nextRequest <- readChan channel
         case nextRequest of
@@ -116,7 +120,9 @@ orderProcessor tradeWriter = do
             forM_ trades $ (\trade -> 
               let sendConfirmation clientId = case SMap.lookup clientId tradeChannels of
                                               Nothing -> return ()
-                                              Just confirmationChannel -> writeChan confirmationChannel trade
+                                              Just confirmationChannel -> case (tradeToConfirmation clientId trade) of
+                                                                            Nothing -> return ()
+                                                                            Just tc -> writeChan confirmationChannel tc
               in 
                 writeTrade tradeWriter trade >>
                 sendConfirmation (trade_buy_client trade) >> 

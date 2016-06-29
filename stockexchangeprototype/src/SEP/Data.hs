@@ -34,9 +34,17 @@ data Trade = Trade {
 --  trade_creationTimeStampUtc :: DateTime
 }
 
-data TradeConfirmation = TradeConfirmation {i
+data TradeConfirmation = TradeConfirmation {
   trade_confirmation_direction :: Direction,
   trade_confirmation_price :: Price,
   trade_confirmation_quantity :: Int
 }
   
+tradeToConfirmation :: ClientIdentifier -> Trade -> Maybe TradeConfirmation
+tradeToConfirmation clientIdentifier (Trade p q b s) = 
+  if clientIdentifier == b 
+    then Just $ TradeConfirmation Buy p s 
+    else 
+      if clientIdentifier == s
+      then Just $ TradeConfirmation Sell p s
+      else Nothing
