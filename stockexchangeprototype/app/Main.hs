@@ -2,6 +2,10 @@
 
 -- TODO:
 --
+-- Generally tease out functionality from Main.hs into seperate modules to make it easier to follow
+-- Reduce use of IO
+-- Property based and spec based tests
+-- STM?
 -- Handle exceptions and close file handle when writing with TradeWriter
 -- Circular writing of trade files
 -- Accounting - checking balances before allowing trades, keeping track of balances and number of shares, transfers in/out etc
