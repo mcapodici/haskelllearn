@@ -18,10 +18,10 @@ unstampedOrderParser =
     qty <- read <$> many1 digit -- TODO: Limit number of digits of price and qty?
     char '@'
     price <- read <$> many1 digit
-    return (\ts i -> Order direction price qty ts i)
+    return $ Order direction price qty
 
 parseUnstampedOrder :: Text -> Maybe UnstampedOrder
-parseUnstampedOrder = rightToMaybe . (parse unstampedOrderParser "order")
+parseUnstampedOrder = rightToMaybe . parse unstampedOrderParser "order"
 
 rightToMaybe :: Either a b -> Maybe b
 rightToMaybe (Left a) = Nothing

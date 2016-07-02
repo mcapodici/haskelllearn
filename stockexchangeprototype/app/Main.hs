@@ -20,6 +20,7 @@ import Control.Concurrent
 import Control.Monad
 import Data.DateTime
 import Data.Set
+import Data.Foldable
 import Network.Socket
 import SEP.Data
 import SEP.OrderBook
@@ -75,9 +76,9 @@ runTraderConnection (connectedSock, _) channel clientId = do
     confirmation <- readChan confirmationChannel 
     TextLzIO.hPutStrLn hdl $ 
       Text.format "Trade confirmation: {} {}@{}" 
-      (if (trade_confirmation_direction confirmation) == Buy then "B" else "S" :: TextLz.Text, 
-      trade_confirmation_quantity confirmation, 
-      trade_confirmation_price confirmation)
+      (if tradeConfirmationDirection confirmation == Buy then "B" else "S" :: TextLz.Text, 
+      tradeConfirmationQuantity confirmation, 
+      tradeConfirmationPrice confirmation)
 
   forever $ do
     maybeUnstampedOrder <- parseUnstampedOrder . TextLz.init <$> TextLzIO.hGetLine hdl
@@ -121,36 +122,34 @@ orderProcessor tradeWriter = do
         case nextRequest of
           SXRequestOrder nextOrder -> do
             let (newOc, trades) = processOrder nextOrder book
-            forM_ trades $ (\trade -> 
+            forM_ trades (\trade -> 
               let sendConfirmation clientId = case SMap.lookup clientId tradeChannels of
-                                              Nothing -> return ()
-                                              Just confirmationChannel -> case (tradeToConfirmation clientId trade) of
-                                                                            Nothing -> return ()
-                                                                            Just tc -> writeChan confirmationChannel tc
+                                                Nothing -> return ()
+                                                Just confirmationChannel -> forM_ (tradeToConfirmation clientId trade) (writeChan confirmationChannel)
               in 
                 writeTrade tradeWriter trade >>
-                sendConfirmation (trade_buy_client trade) >> 
-                sendConfirmation (trade_sell_client trade)
+                sendConfirmation (tradeBuyClient trade) >> 
+                sendConfirmation (tradeSellClient trade)
               )
             loop (newOc, tradeChannels, i+1) channel
           RegisterClientChannel clientId chan -> loop (book, SMap.insert clientId chan tradeChannels, i) channel
 
 processOrder :: Order -> OrderBook -> (OrderBook, [Trade])
 processOrder order book =
-  let maybeMatchOrder = case order_direction order of
+  let maybeMatchOrder = case orderDirection order of
                           Buy -> bestSellOrder book
                           Sell -> bestBuyOrder book in
   case maybeMatchOrder of
     Nothing -> (queueOrder order book, []) -- No candidate matching orders at all, so just queue this order for now
     Just mo -> 
       if canMatch order mo then
-        let matchedQty = min (order_quantity mo) (order_quantity order) in
-        let moNewQty = order_quantity mo - matchedQty in 
-        let orderNewQty = order_quantity order - matchedQty in
-        let (buy_clientId, sell_clientId) = case order_direction order of 
-                                          Buy -> (order_clientId order, order_clientId mo)
-                                          Sell -> (order_clientId mo, order_clientId order) in
-        let trade = Trade (choosePrice (order_price order) (order_price mo)) matchedQty buy_clientId sell_clientId in
+        let matchedQty = min (orderQuantity mo) (orderQuantity order) in
+        let moNewQty = orderQuantity mo - matchedQty in 
+        let orderNewQty = orderQuantity order - matchedQty in
+        let (buyClientId, sellClientId) = case orderDirection order of 
+                                          Buy -> (orderClientId order, orderClientId mo)
+                                          Sell -> (orderClientId mo, orderClientId order) in
+        let trade = Trade (choosePrice (orderPrice order) (orderPrice mo)) matchedQty buyClientId sellClientId in
         let bookWithoutMo = removeOrder mo book in
         case moNewQty of
           0 -> 
@@ -170,9 +169,9 @@ processOrder order book =
 
 canMatch :: Order -> Order -> Bool
 canMatch x y =
-  if (order_direction x == Buy) 
-    then (order_price x) >= (order_price y)
-    else (order_price x) <= (order_price y)
+  if orderDirection x == Buy 
+    then orderPrice x >= orderPrice y
+    else orderPrice x <= orderPrice y
 
 choosePrice :: Price -> Price -> Price
-choosePrice buyPrice sellPrice = floor $ ((fromIntegral buyPrice) + (fromIntegral sellPrice)) / 2
+choosePrice buyPrice sellPrice = floor $ (fromIntegral buyPrice + fromIntegral sellPrice) / 2

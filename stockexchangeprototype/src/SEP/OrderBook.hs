@@ -14,8 +14,8 @@ emptyBook :: OrderBook
 emptyBook = OrderBook empty empty
 
 queueOrder :: Order -> OrderBook -> OrderBook
-queueOrder o@(Order Buy _ _ _ _) (OrderBook buys sells) = (OrderBook (S.insert o buys) sells)
-queueOrder o@(Order Sell _ _ _ _) (OrderBook buys sells) = (OrderBook buys (S.insert o sells))
+queueOrder o@(Order Buy _ _ _ _) (OrderBook buys sells) = OrderBook (S.insert o buys) sells
+queueOrder o@(Order Sell _ _ _ _) (OrderBook buys sells) = OrderBook buys (S.insert o sells)
 
 bestBuyOrder :: OrderBook -> Maybe Order
 bestBuyOrder book = fst <$> maxView (buyQueue book)
