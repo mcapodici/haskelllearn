@@ -1,0 +1,29 @@
+The idea is to recreate some unix commands in Haskell, but probably a bit more bare
+bones than the real ones.
+
+To invoke the unix comman, the first argument is the command, and the remaining
+are the args to that command.
+
+E.g. unixutils cat 1.txt 2.txt
+
+1. cat
+
+This will "concatenate files and print on the standard output" as per man page.
+Except ... that is all it will do so no "cat -v" or similar options.
+
+So it will take alist of files as arguments, and then read from those files in
+that order and direct the exact same stream of bytes to the standard output.
+
+E.g. unixutils cat 1.txt 2.txt
+
+2. grep
+
+To be specified....
+
+3. ls
+
+To be specified....
+
+4. rm
+
+To be specified....
