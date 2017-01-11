@@ -26,11 +26,7 @@ process :: Util -> [String] -> IO()
 process Cat = cat 
 
 splitArgsForUtil :: [String] -> Maybe (Util, [String])
-splitArgsForUtil args = do
-  firstArg <- head args
-  utilArgs <- tail args
-  util <- parseUtilName firstArg
-  return (util, utilArgs)
+splitArgsForUtil args = (,) <$> (head args >>= parseUtilName) <*> (tail args)
   
 parseUtilName :: String -> Maybe Util
 parseUtilName x = p $ map toLower x
