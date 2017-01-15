@@ -1,0 +1,14 @@
+(\id.
+ \zero.
+ \one.
+ \two.
+ \three.
+ \four.
+  succ three)
+  (\a.a)
+  (\zero    .(\s.\z.z))
+  (\one     .(\s.\z.(s z)))
+  (\two     .(\s.\z.(s (s (z)))))
+  (\three   .(\s.\z.(s (s (s (z))))))
+  (\four    .(\s.\z.(s (s (s (s (z)))))))
+  (\succ    .(\n.\s.\z.n (s z)))

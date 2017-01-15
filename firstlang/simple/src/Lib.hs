@@ -1,12 +1,16 @@
 module Lib where
 
-import Text.ParserCombinators.Parsec hiding (spaces)
+import Text.ParserCombinators.Parsec
 import System.Environment
 import Control.Applicative ((<*),(*>))
 import Control.Monad
 
 someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+someFunc = do
+  fileName <- getArgs
+  text <- readFile (head fileName) -- yes I know!
+  let expression = parse parseLambda "lambda" text
+  putStrLn (show expression)
 
 -- Lambda Calculus Data Structure
 
@@ -20,8 +24,8 @@ data Expression =
 
 -- Parser For Lambda Calculus
 
-spaces :: Parser ()
-spaces = skipMany1 space
+lexeme :: Parser a -> Parser a
+lexeme a = a <* spaces
 
 variable :: Parser String
 variable = do 
@@ -30,17 +34,17 @@ variable = do
   return (first:rest)
 
 variableExp :: Parser Expression
-variableExp = Var <$> variable
+variableExp = Var <$> variable 
 
 call :: Parser Expression
-call = chainl1 parseExprExceptCall (spaces >> return Call) 
+call = chainl1 (lexeme parseExprExceptCall) (return Call) 
 
 func :: Parser Expression
 func = do
   char '\\'
-  v <- variable
+  v <- lexeme variable
   char '.'
-  skipMany spaces
+  spaces
   e <- parseExprTotal
   return $ Func v e
 
@@ -52,5 +56,10 @@ parseExprExceptCall =
 
 parseExprTotal :: Parser Expression
 parseExprTotal = 
-  call <|> parseExprExceptCall
-  
+  lexeme call <|> lexeme parseExprExceptCall
+ 
+parseLambda :: Parser Expression
+parseLambda = do
+  spaces
+  result <- parseExprTotal
+  return result
