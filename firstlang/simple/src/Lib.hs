@@ -4,7 +4,6 @@ import Text.ParserCombinators.Parsec hiding (spaces)
 import System.Environment
 import Control.Applicative ((<*),(*>))
 import Control.Monad
---import Data.Map
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
@@ -37,7 +36,13 @@ call :: Parser Expression
 call = chainl1 parseExprExceptCall (spaces >> return Call) 
 
 func :: Parser Expression
-func = Func <$> ((char '\\') >> variable) <*> (spaces *> parseExprTotal) 
+func = do
+  char '\\'
+  v <- variable
+  char '.'
+  skipMany spaces
+  e <- parseExprTotal
+  return $ Func v e
 
 parseExprExceptCall :: Parser Expression
 parseExprExceptCall =
@@ -49,22 +54,3 @@ parseExprTotal :: Parser Expression
 parseExprTotal = 
   call <|> parseExprExceptCall
   
--- Interpreter For Lambda Calculus
-
---type Context = Map Name Expression
-
---data ExpressionWithContext = ExpressionWithContext Name Expression Context
-
---lookup :: Name -> Context -> Maybe Expression
-
-
---run :: Context -> Expression -> ExpressionWithContext
---run ctx (Var x) 
-
-
-
-
-
-
-
-
