@@ -33,13 +33,18 @@ aand t1 t2 = itt t1 t2 TFalse
 smallStep (IfThenElse TTrue term _) = return term
 smallStep (IfThenElse TFalse _ term) = return term
 smallStep (IfThenElse term1 term2 term3) = IfThenElse <$> smallStep term1 <*> Right term2 <*> Right term3
+
 smallStep (TIsZero TZero) = return TTrue
 smallStep (TIsZero (TSucc _)) = return TFalse
+
 smallStep (TPred TZero) = return TZero
 smallStep (TPred (TSucc term)) = return term
-smallStep (TSucc term) = TSucc <$> smallStep term
 smallStep (TPred term) = TPred <$> smallStep term
+
+smallStep (TSucc term) = TSucc <$> smallStep term
+
 smallStep (TIsZero term) = TIsZero <$> smallStep term
+
 smallStep _ = Left Terminate
 
 eval :: Term -> Term
