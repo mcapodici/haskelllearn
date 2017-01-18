@@ -23,6 +23,7 @@ data Term
   | TIsZero Term
   | TPred Term
   | IfThenElse Term Term Term
+  | Wrong
   deriving Show
 
 data Value
@@ -70,24 +71,38 @@ pitt = lexeme $ do
 --asNumber _ = Nothing
 --itt = IfThenElse
 --aand t1 t2 = itt t1 t2 TFalse
+--i
 --
+--
+isNumValue TZero = True
+isNumValue (TSucc t) = isNumValue t
+isNumValue _ = False
 
 -- Evaluation
 
+
 smallStep (IfThenElse TTrue term _) = return term
 smallStep (IfThenElse TFalse _ term) = return term
-smallStep (IfThenElse term1 term2 term3) = IfThenElse <$> smallStep term1 <*> Right term2 <*> Right term3
+smallStep (IfThenElse term1 term2 term3) = case smallStep term1 of
+  Left Terminate -> return Wrong -- Case where term1 is a value but not true/false
+  next -> IfThenElse <$> next <*> Right term2 <*> Right term3
 
 smallStep (TIsZero TZero) = return TTrue
 smallStep (TIsZero (TSucc _)) = return TFalse
+smallStep (TIsZero term) = case smallStep term of
+  Left Terminate -> return Wrong -- Case where term1 is a value but not a number
+  next -> TIsZero <$> next
 
 smallStep (TPred TZero) = return TZero
 smallStep (TPred (TSucc term)) = return term
-smallStep (TPred term) = TPred <$> smallStep term
+smallStep (TPred term) = case smallStep term of
+  Left Terminate -> return Wrong -- Case where term1 is a value but not a number
+  next -> TPred <$> next
 
+smallStep (TSucc TTrue) = return Wrong
+smallStep (TSucc TFalse) = return Wrong
+smallStep (TSucc Wrong) = return Wrong
 smallStep (TSucc term) = TSucc <$> smallStep term
-
-smallStep (TIsZero term) = TIsZero <$> smallStep term
 
 smallStep _ = Left Terminate
 
