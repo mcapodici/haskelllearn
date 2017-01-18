@@ -1,19 +1,9 @@
 module Lib where
 
 import Text.ParserCombinators.Parsec
-import System.IO
 
 main :: IO ()
-main = do
-  putStr ">"
-  hFlush stdout
-  text <- getLine
-  if text == "quit" then return () else do
-    let result = parse pexpression "" text
-    case result of 
-      Left msg -> putStrLn $ "Error " ++ (show msg)
-      Right term -> putStrLn $ show (eval term)
-    main
+main = putStrLn "someFunc"
 
 data Term
   = TTrue
@@ -37,29 +27,11 @@ data Terminate = Terminate
 lexeme :: Parser a -> Parser a
 lexeme a = a <* spaces
 
-pexpression :: Parser Term
-pexpression = pterm <* eof
+parser :: Parser Term
+parser = lexeme *>
+      string "true" *> return TTrue
+  <|> string "false" *> pure TFalse 
 
--- todo see http://blog.ezyang.com/2014/05/parsec-try-a-or-b-considered-harmful/
-
-pterm :: Parser Term
-pterm = choice $ map (try.lexeme) [ptrue, pfalse, p0, psucc, ppred, piszero, pitt, pparens]
-
-pparens = string "(" *> pterm <* string ")"
-ptrue = string "true" *> pure TTrue
-pfalse =  string "false" *> pure TFalse 
-p0 = string "0" *> pure TZero
-psucc = lexeme (string "succ") *> (TSucc <$> pterm)
-ppred = lexeme (string "pred") *> (TPred <$> pterm)
-piszero = lexeme (string "iszero") *> (TIsZero <$> pterm)
-pitt = lexeme $ do
-  lexeme . string $ "if"
-  condition <- pterm
-  lexeme . string $ "then"
-  trueb <- pterm
-  lexeme . string $ "else"
-  falseb <- pterm
-  return $ IfThenElse condition trueb falseb
 
 --add n t = (iterate TSucc t) !! n
 --zero = TZero
