@@ -4,11 +4,13 @@
  \two.
  \three.
  \four.
-  succ three)
+ \succ.
+ \plus. plus four (plus four m))
   (\a.a)
-  (\zero    .(\s.\z.z))
-  (\one     .(\s.\z.(s z)))
-  (\two     .(\s.\z.(s (s (z)))))
-  (\three   .(\s.\z.(s (s (s (z))))))
-  (\four    .(\s.\z.(s (s (s (s (z)))))))
-  (\succ    .(\n.\s.\z.n (s z)))
+  (\s.\z.z)
+  (\s.\z.(s z))
+  (\s.\z.(s (s (z))))
+  (\s.\z.(s (s (s (z)))))
+  (\s.\z.(s (s (s (s (z))))))
+  (\n.\s.\z.s (n s z))
+  (λm. λn. λs. λz. m s (n s z))
