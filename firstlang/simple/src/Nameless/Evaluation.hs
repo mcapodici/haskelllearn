@@ -2,21 +2,31 @@ module Nameless.Evaluation where
 
 import Nameless.Data
 
-evaluate :: NamelessExp -> [NamelessExp]
-evaluate t = case evaluateStep t of
-  Just t' -> t : (evaluate t')
+evaluate :: (NamelessExp -> Maybe NamelessExp) -> NamelessExp -> [NamelessExp]
+evaluate step t = case step t of
+  Just t' -> t : (evaluate step t')
   _ -> [t]
 
-evaluateStep :: NamelessExp -> Maybe NamelessExp
-evaluateStep (NlCall e1 e2) = case evaluateStep e1 of
+callByValueStep :: NamelessExp -> Maybe NamelessExp
+callByValueStep (NlCall e1 e2) = case callByValueStep e1 of
   Just e1' -> Just $ NlCall e1' e2
-  Nothing -> case evaluateStep e2 of
+  Nothing -> case callByValueStep e2 of
     Just e2' -> Just $ NlCall e1 e2'
     Nothing -> case e1 of
       (NlFunc t) -> Just $ shift (-1) 0 (substitute 0 (shift 1 0 e2) t)
       _ -> Nothing
-evaluateStep (NlFunc e) = NlFunc <$> (evaluateStep e)
-evaluateStep _ = Nothing
+callByValueStep (NlFunc e) = NlFunc <$> (callByValueStep e)
+callByValueStep _ = Nothing
+
+callByNameStep :: NamelessExp -> Maybe NamelessExp
+callByNameStep (NlCall e1 e2) = case callByValueStep e1 of
+  Just e1' -> Just $ NlCall e1' e2
+  Nothing -> case e1 of
+      (NlFunc t) -> Just $ shift (-1) 0 (substitute 0 (shift 1 0 e2) t)
+      _ -> Nothing
+callByNameStep (NlFunc e) = NlFunc <$> (callByValueStep e)
+callByNameStep _ = Nothing
+
 
 substitute :: Int -> NamelessExp -> NamelessExp -> NamelessExp
 substitute j s (NlVar k)

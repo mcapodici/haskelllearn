@@ -11,8 +11,10 @@ import Data.List
 
 someFunc :: IO ()
 someFunc = do
-  fileName <- getArgs
-  text <- readFile (head fileName) -- yes I know!
+  args <- getArgs
+  let fileName = args !! 0
+  let step = if length args > 1 && args !! 1 == "lazy" then callByNameStep else callByValueStep
+  text <- readFile fileName
   case parseNamed text of
     Right expression -> do
       putStrLn "Your Expression as an object:"
@@ -24,7 +26,7 @@ someFunc = do
       let nameless = toNameless freeVars expression
       putStrLn $ show $ nameless 
       putStrLn "\nNameless Evalutated:"
-      let evaled = evaluate nameless
+      let evaled = evaluate step nameless
       putStrLn $ join $ intersperse "\n" (map show evaled)
     _ ->
       putStrLn "Error!"
