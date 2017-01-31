@@ -18,3 +18,4 @@ cabal.sandbox.config
 *.swp
 trades.txt
 *.swo
+*.swn
